@@ -5,3 +5,6 @@ A basic neural network based Python Project which uses Physics formulae to predi
 
 # Requirements
 Python 3.12.13(Required for TensorFlow)
+
+# Usage
+Install all the packages in the requirements.txt and run the ipynb file
