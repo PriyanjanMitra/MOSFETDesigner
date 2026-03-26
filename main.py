@@ -270,18 +270,80 @@ def interactive_mode(designer: NanoMOSFETDesigner) -> None:
             print(f"Error: Prediction failed - {e}")
 
 
+def interactive_training_mode():
+    print("\n" + "=" * 50)
+    print("NanoMOSFET Designer - Interactive Training Mode")
+    print("=" * 50)
+
+    csv_file = input("\nEnter path to CSV file: ").strip()
+    if not csv_file:
+        print("Error: No CSV file provided")
+        return None
+
+    if not os.path.exists(csv_file):
+        print(f"Error: CSV file not found: {csv_file}")
+        return None
+
+    try:
+        epochs_input = input("Number of training epochs [default: 200]: ").strip()
+        epochs = int(epochs_input) if epochs_input else 200
+
+        batch_size_input = input("Batch size [default: 32]: ").strip()
+        batch_size = int(batch_size_input) if batch_size_input else 32
+
+        verbose_input = input("Show detailed training info? (y/n) [default: n]: ").strip().lower()
+        verbose = 1 if verbose_input == 'y' else 0
+
+        plot_input = input("Save training history plot? (y/n) [default: n]: ").strip().lower()
+        plot_path = None
+        if plot_input == 'y':
+            plot_path = input("Enter plot filename [default: training_history.png]: ").strip()
+            if not plot_path:
+                plot_path = "training_history.png"
+
+        return {
+            'csv_file': csv_file,
+            'epochs': epochs,
+            'batch_size': batch_size,
+            'verbose': verbose,
+            'plot_path': plot_path
+        }
+
+    except ValueError as e:
+        print(f"Error: Invalid input - {e}")
+        return None
+
+
 def main():
     parser = argparse.ArgumentParser(description='NanoMOSFET Designer - Nanoscale MOSFET Design Tool')
-    parser.add_argument('--csv', type=str, required=True, help='Path to CSV file with training data')
+    parser.add_argument('--csv', type=str, help='Path to CSV file with training data')
     parser.add_argument('--epochs', type=int, default=200, help='Number of training epochs (default: 200)')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training (default: 32)')
     parser.add_argument('--interactive', action='store_true', help='Run in interactive mode for multiple predictions')
+    parser.add_argument('--train_interactive', action='store_true',
+                        help='Interactive training mode with prompts for epochs and batch size')
     parser.add_argument('--predict', nargs=4, metavar=('ID', 'SS', 'VTGM', 'TOX'),
                         help='Predict design from given parameters: Id SS Vtgm tox')
     parser.add_argument('--plot', type=str, help='Save training history plot to file')
     parser.add_argument('--verbose', action='store_true', help='Print detailed training information')
 
     args = parser.parse_args()
+
+    if args.train_interactive:
+        training_config = interactive_training_mode()
+        if training_config is None:
+            sys.exit(1)
+
+        args.csv = training_config['csv_file']
+        args.epochs = training_config['epochs']
+        args.batch_size = training_config['batch_size']
+        args.verbose = training_config['verbose']
+        args.plot = training_config['plot_path']
+
+    if not args.csv:
+        parser.print_help()
+        print("\nError: CSV file is required. Use --csv or --train_interactive")
+        sys.exit(1)
 
     if not os.path.exists(args.csv):
         print(f"Error: CSV file not found: {args.csv}")
@@ -330,11 +392,11 @@ def main():
         interactive_mode(designer)
 
     else:
-        parser.print_help()
+        print("\nModel is ready for predictions.")
+        print("Use --predict or --interactive to make predictions.")
         print("\nExample usage:")
-        print("  Train and predict: python main.py --csv data.csv --predict 1e-6 80 0.3 0.5")
-        print("  Train and interactive: python main.py --csv data.csv --interactive")
-        print("  Train with custom epochs: python main.py --csv data.csv --epochs 300 --plot history.png")
+        print("  python main.py --csv data.csv --predict 1e-6 80 0.3 0.5")
+        print("  python main.py --csv data.csv --interactive")
 
 
 if __name__ == "__main__":
