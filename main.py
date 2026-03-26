@@ -17,6 +17,7 @@ warnings.filterwarnings('ignore')
 tf.get_logger().setLevel('ERROR')
 
 
+# noinspection PyTypeChecker
 class NanoMOSFETDesigner:
     def __init__(self):
         self.q: tf.Tensor = tf.constant(1.6e-19, dtype=tf.float32)
@@ -72,6 +73,7 @@ class NanoMOSFETDesigner:
         tox_m = tox * 1e-9
         Na_m = Na * 1e6
 
+        # noinspection PyTypeChecker
         phi_f = (self.k * self.temperature / self.q) * tf.math.log(Na_m / self.ni)
         Cox = self.eps_0 * tf.constant(self.eps_ox, dtype=tf.float32) / tox_m
         Qb = tf.math.sqrt(2.0 * self.q * tf.constant(self.eps_si, dtype=tf.float32) *
@@ -130,6 +132,7 @@ class NanoMOSFETDesigner:
         }
 
 
+# noinspection DuplicatedCode
 def load_and_preprocess_data(csv_file: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     try:
         df = pd.read_csv(csv_file)
@@ -157,6 +160,7 @@ def load_and_preprocess_data(csv_file: str) -> Tuple[np.ndarray, np.ndarray, np.
     required_features = ['Id', 'SS', 'Vtgm', 'tox']
     missing_features = [f for f in required_features if f not in actual_columns]
 
+    # noinspection DuplicatedCode
     if missing_features:
         print(f"Warning: Missing columns {missing_features}. Using synthetic data generation.")
         num_samples = len(df)
