@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[2]:
-
-
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -18,8 +12,10 @@ import argparse
 import sys
 
 import warnings
+
 warnings.filterwarnings('ignore')
 tf.get_logger().setLevel('ERROR')
+
 
 class NanoMOSFETDesigner:
     def __init__(self):
@@ -53,7 +49,7 @@ class NanoMOSFETDesigner:
 
         self.model = keras.Model(inputs=inputs, outputs=outputs)
         self.model.compile(optimizer=keras.optimizers.Adam(learning_rate=0.001),
-                         loss='mse')
+                           loss='mse')
 
     def apply_nanoscale_constraints(self, design_params: np.ndarray) -> np.ndarray:
         Lg = np.clip(design_params[:, 0], self.min_Lg, self.max_Lg)
@@ -79,22 +75,19 @@ class NanoMOSFETDesigner:
         phi_f = (self.k * self.temperature / self.q) * tf.math.log(Na_m / self.ni)
         Cox = self.eps_0 * tf.constant(self.eps_ox, dtype=tf.float32) / tox_m
         Qb = tf.math.sqrt(2.0 * self.q * tf.constant(self.eps_si, dtype=tf.float32) *
-                         self.eps_0 * Na_m * phi_f)
+                          self.eps_0 * Na_m * phi_f)
         Vth = tf.constant(self.phi_ms, dtype=tf.float32) + 2.0 * phi_f + Qb / Cox
 
         delta_Vth = 0.1 / (Lg * tox)
         Vth += delta_Vth
 
-        Vd = Vtgm + (Id * Lg_m) / (Cox * (0.7 - Vth) * (Lg/Lch) * 1e-6)
+        Vd = Vtgm + (Id * Lg_m) / (Cox * (0.7 - Vth) * (Lg / Lch) * 1e-6)
 
         return float(tf.clip_by_value(Vd, 0.1, 1.2).numpy()[0])
 
     def train(self, X_train: np.ndarray, y_train: np.ndarray,
               X_val: Optional[np.ndarray] = None, y_val: Optional[np.ndarray] = None,
               epochs: int = 200, batch_size: int = 32, verbose: int = 1) -> Any:
-        """Train the model on the provided data"""
-
-        # Scale the data
         X_train_norm = self.feature_scaler.fit_transform(X_train)
         y_train_norm = self.design_scaler.fit_transform(y_train)
 
@@ -104,7 +97,6 @@ class NanoMOSFETDesigner:
             y_val_norm = self.design_scaler.transform(y_val)
             validation_data = (X_val_norm, y_val_norm)
 
-        # Train the model
         history = self.model.fit(
             X_train_norm, y_train_norm,
             epochs=epochs,
@@ -118,7 +110,6 @@ class NanoMOSFETDesigner:
         return history
 
     def predict_design(self, Id: float, SS: float, Vtgm: float, tox: float) -> Dict[str, str]:
-        """Predict MOSFET design parameters from performance metrics"""
         perf_input = np.array([[Id, SS, Vtgm, tox]], dtype=np.float32)
         perf_input_norm = self.feature_scaler.transform(perf_input)
 
@@ -138,8 +129,8 @@ class NanoMOSFETDesigner:
             'Oxide thickness': f"{tox:.2f} nm"
         }
 
+
 def load_and_preprocess_data(csv_file: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Load and preprocess data from CSV file"""
     try:
         df = pd.read_csv(csv_file)
     except Exception as e:
@@ -198,8 +189,8 @@ def load_and_preprocess_data(csv_file: str) -> Tuple[np.ndarray, np.ndarray, np.
 
     return train_test_split(X, y, test_size=0.2, random_state=42)
 
+
 def plot_training_history(history: Any, save_path: Optional[str] = None) -> None:
-    """Plot the training history"""
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.plot(history.history['loss'], label='Training Loss', linewidth=2, color='#3498db')
     if 'val_loss' in history.history:
@@ -217,8 +208,8 @@ def plot_training_history(history: Any, save_path: Optional[str] = None) -> None
     else:
         plt.show()
 
+
 def print_design_results(results: Dict[str, str]) -> None:
-    """Print design results in a formatted way"""
     print("\n" + "=" * 50)
     print("NANOSCALE MOSFET DESIGN RESULTS")
     print("=" * 50)
@@ -232,8 +223,8 @@ def print_design_results(results: Dict[str, str]) -> None:
     print("Quantum-aware design with Lg: 0.1-1nm constraints applied")
     print("=" * 50)
 
+
 def interactive_mode(designer: NanoMOSFETDesigner) -> None:
-    """Run interactive command-line mode for predictions"""
     print("\n" + "=" * 50)
     print("NanoMOSFET Designer - Interactive Mode")
     print("=" * 50)
@@ -278,96 +269,55 @@ def interactive_mode(designer: NanoMOSFETDesigner) -> None:
         except Exception as e:
             print(f"Error: Prediction failed - {e}")
 
-def run_jupyter_mode():
-    """Run in Jupyter/IPython environment"""
-    print("\n" + "=" * 50)
-    print("NanoMOSFET Designer - Jupyter Mode")
-    print("=" * 50)
-    print("\nThis is a Jupyter/IPython environment.")
-    print("You can use the NanoMOSFETDesigner class directly.")
-    print("\nExample usage:")
-    print("  designer = NanoMOSFETDesigner()")
-    print("  X_train, X_test, y_train, y_test = load_and_preprocess_data('data.csv')")
-    print("  designer.train(X_train, y_train, X_test, y_test, epochs=200)")
-    print("  results = designer.predict_design(1e-6, 80, 0.3, 0.5)")
-    print("  print_design_results(results)")
-    print("\n" + "=" * 50)
-
-    # Return the class for interactive use
-    return NanoMOSFETDesigner
 
 def main():
-    # Check if running in Jupyter/IPython
-    try:
-        from IPython import get_ipython
-        if get_ipython() is not None:
-            # Running in Jupyter/IPython
-            run_jupyter_mode()
-            return
-    except ImportError:
-        pass
-
-    # Regular command-line mode
     parser = argparse.ArgumentParser(description='NanoMOSFET Designer - Nanoscale MOSFET Design Tool')
-    parser.add_argument('--csv', type=str, help='Path to CSV file with training data')
-    parser.add_argument('--epochs', type=int, default=200, help='Number of training epochs')
-    parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training')
-    parser.add_argument('--interactive', action='store_true', help='Run in interactive mode')
+    parser.add_argument('--csv', type=str, required=True, help='Path to CSV file with training data')
+    parser.add_argument('--epochs', type=int, default=200, help='Number of training epochs (default: 200)')
+    parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training (default: 32)')
+    parser.add_argument('--interactive', action='store_true', help='Run in interactive mode for multiple predictions')
     parser.add_argument('--predict', nargs=4, metavar=('ID', 'SS', 'VTGM', 'TOX'),
-                       help='Predict design from given parameters: Id SS Vtgm tox')
+                        help='Predict design from given parameters: Id SS Vtgm tox')
     parser.add_argument('--plot', type=str, help='Save training history plot to file')
     parser.add_argument('--verbose', action='store_true', help='Print detailed training information')
 
-    # Parse arguments, ignoring unknown args (like Jupyter kernel arguments)
-    args, unknown = parser.parse_known_args()
+    args = parser.parse_args()
 
-    if unknown:
-        print(f"Note: Ignoring unknown arguments: {unknown}")
+    if not os.path.exists(args.csv):
+        print(f"Error: CSV file not found: {args.csv}")
+        sys.exit(1)
 
-    # Initialize designer
     designer = NanoMOSFETDesigner()
 
-    # Train if CSV is provided
-    if args.csv:
-        if not os.path.exists(args.csv):
-            print(f"Error: CSV file not found: {args.csv}")
-            sys.exit(1)
+    print(f"Loading data from: {args.csv}")
+    try:
+        X_train, X_test, y_train, y_test = load_and_preprocess_data(args.csv)
+        print(f"Training samples: {len(X_train)}, Test samples: {len(X_test)}")
 
-        print(f"Loading data from: {args.csv}")
-        try:
-            X_train, X_test, y_train, y_test = load_and_preprocess_data(args.csv)
-            print(f"Training samples: {len(X_train)}, Test samples: {len(X_test)}")
+        print("Training model...")
+        history = designer.train(
+            X_train, y_train,
+            X_val=X_test, y_val=y_test,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            verbose=1 if args.verbose else 0
+        )
 
-            print("Training model...")
-            history = designer.train(
-                X_train, y_train,
-                X_val=X_test, y_val=y_test,
-                epochs=args.epochs,
-                batch_size=args.batch_size,
-                verbose=1 if args.verbose else 0
-            )
+        print("Training completed!")
+        print(f"Final training loss: {history.history['loss'][-1]:.6f}")
+        if 'val_loss' in history.history:
+            print(f"Final validation loss: {history.history['val_loss'][-1]:.6f}")
 
-            print("Training completed!")
-            print(f"Final training loss: {history.history['loss'][-1]:.6f}")
-            if 'val_loss' in history.history:
-                print(f"Final validation loss: {history.history['val_loss'][-1]:.6f}")
+        if args.plot:
+            plot_training_history(history, args.plot)
+        elif args.verbose:
+            plot_training_history(history)
 
-            # Plot training history
-            if args.plot:
-                plot_training_history(history, args.plot)
-            elif args.verbose:
-                plot_training_history(history)
+    except Exception as e:
+        print(f"Error during training: {e}")
+        sys.exit(1)
 
-        except Exception as e:
-            print(f"Error during training: {e}")
-            sys.exit(1)
-
-    # Make single prediction
     if args.predict:
-        if not designer.model:
-            print("Error: Model not trained. Please provide a CSV file for training first.")
-            sys.exit(1)
-
         try:
             Id, SS, Vtgm, tox = map(float, args.predict)
             results = designer.predict_design(Id, SS, Vtgm, tox)
@@ -376,21 +326,16 @@ def main():
             print(f"Error: Invalid prediction parameters - {e}")
             sys.exit(1)
 
-    # Interactive mode
     elif args.interactive:
-        if not designer.model:
-            print("Error: Model not trained. Please provide a CSV file for training first.")
-            sys.exit(1)
         interactive_mode(designer)
 
-    # No arguments - show help
-    elif not args.csv and not args.predict and not args.interactive:
+    else:
         parser.print_help()
         print("\nExample usage:")
-        print("  Train model: python main.py --csv data.csv --epochs 200")
-        print("  Predict: python main.py --csv data.csv --predict 1e-6 80 0.3 0.5")
-        print("  Interactive: python main.py --csv data.csv --interactive")
+        print("  Train and predict: python main.py --csv data.csv --predict 1e-6 80 0.3 0.5")
+        print("  Train and interactive: python main.py --csv data.csv --interactive")
+        print("  Train with custom epochs: python main.py --csv data.csv --epochs 300 --plot history.png")
+
 
 if __name__ == "__main__":
     main()
-
