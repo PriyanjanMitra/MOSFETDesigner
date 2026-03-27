@@ -27,6 +27,14 @@ class NanoMOSFETDesigner:
             material: Channel material ('silicon', 'sige', 'gaas', 'gan', 'sic', 'inp', 'diamond')
         """
         # Fundamental constants
+        self.mobility_p = None
+        self.eps_si = None
+        self.ni = None
+        self.material_name = None
+        self.bandgap = None
+        self.mobility_n = None
+        self.electron_affinity = None
+        self.phi_ms = None
         self.q: tf.Tensor = tf.constant(1.6e-19, dtype=tf.float32)
         self.eps_0: tf.Tensor = tf.constant(8.85e-12, dtype=tf.float32)
         self.eps_ox: float = 3.9
