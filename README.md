@@ -339,12 +339,8 @@ Typical model performance on validation datasets:
 
 ## Future Development Roadmap
 
-- Quantum transport model integration
 - Multi-gate device architecture support
-- Temperature-dependent parameter predictions
 - Device reliability metrics (NBTI, HCI modeling)
-- Integration with commercial SPICE simulators
-- GPU acceleration for batch predictions
 - Web-based interface for accessibility
 
 ## Contributing
@@ -361,17 +357,6 @@ Contributions are welcome! Please ensure:
 This project is licensed under the MIT License. See the LICENSE file for details.
 
 **Copyright © 2026 Priyanjan Mitra**
-
-## Citation
-
-If you use MOSFETDesigner in academic or professional work, please cite:
-
-```
-MOSFETDesigner: AI-Powered Nanoscale MOSFET Design Tool
-Author: Priyanjan Mitra
-Repository: https://github.com/PriyanjanMitra/MOSFETDesigner
-License: MIT
-```
 
 ## Support and Contact
 
