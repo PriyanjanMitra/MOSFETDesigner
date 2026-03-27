@@ -577,8 +577,8 @@ def main():
         print("\nModel is ready for predictions.")
         print("Use --predict or --interactive to make predictions.")
         print("\nExample usage:")
-        print(f"  python main.py --material gan --generate_data --predict 1e-6 80 0.55 1.44")
-        print(f"  python main.py --material gan --generate_data --interactive")
+        print(f"  python mosfet.py --material gan --generate_data --predict 1e-6 80 0.55 1.44")
+        print(f"  python mosfet.py --material gan --generate_data --interactive")
 
 
 if __name__ == "__main__":
