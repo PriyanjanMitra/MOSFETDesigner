@@ -8,8 +8,6 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 import os
 from typing import Optional, Tuple, Dict, Any
-import argparse
-import sys
 
 import warnings
 
@@ -47,7 +45,7 @@ class NanoMOSFETDesigner:
 
         # Nanoscale constraints with material-specific ranges
         if material in ['gan', 'sic', 'diamond']:
-            self.min_Lg: float = 0.5  # Larger minimum for wide bandgap
+            self.min_Lg: float = 0.5
             self.max_Lg: float = 5.0
             self.max_Lch: float = 20.0
             self.min_Vd: float = 0.5
@@ -76,7 +74,6 @@ class NanoMOSFETDesigner:
     def set_material_properties(self, material: str) -> None:
         """Set semiconductor material properties."""
 
-        # Material database
         materials = {
             'silicon': {
                 'eps_r': 11.7,
@@ -148,7 +145,6 @@ class NanoMOSFETDesigner:
 
         mat = materials[material]
 
-        # Set material properties
         self.eps_si = mat['eps_r']
         self.ni = tf.constant(mat['ni'], dtype=tf.float32)
         self.mobility_n = mat['mobility_n']
@@ -157,8 +153,7 @@ class NanoMOSFETDesigner:
         self.electron_affinity = mat['affinity']
         self.material_name = mat['name']
 
-        # Adjust work function difference
-        φ_m = 5.1  # eV - Work function of gold gate
+        φ_m = 5.1
         if material == 'silicon':
             self.phi_ms = φ_m - (self.electron_affinity + self.bandgap / 2)
         elif material == 'sige':
@@ -173,12 +168,6 @@ class NanoMOSFETDesigner:
             self.phi_ms = φ_m - (self.electron_affinity + self.bandgap / 2) - 0.3
         elif material == 'diamond':
             self.phi_ms = φ_m - (self.electron_affinity + self.bandgap / 2) - 1.0
-
-        print(f"Using material: {self.material_name}")
-        print(f"  - Relative permittivity: {self.eps_si}")
-        print(f"  - Electron mobility: {self.mobility_n} m²/V·s")
-        print(f"  - Bandgap: {self.bandgap} eV")
-        print(f"  - Work function difference: {self.phi_ms:.3f} V")
 
     def build_model(self) -> None:
         """Build a more robust neural network"""
@@ -209,28 +198,23 @@ class NanoMOSFETDesigner:
         return np.column_stack([Lg, doping, Lch, Vd])
 
     def calculate_vd(self, design_params: np.ndarray, input_features: np.ndarray) -> float:
-        """
-        Calculate drain voltage based on device physics
-        """
+        """Calculate drain voltage based on device physics"""
         design_params_tensor = tf.convert_to_tensor(design_params, dtype=tf.float32)
         input_features_tensor = tf.convert_to_tensor(input_features, dtype=tf.float32)
 
         Lg, Na, Lch, _ = tf.unstack(design_params_tensor, axis=1)
         Id_target, SS, Vtgm, tox = tf.unstack(input_features_tensor, axis=1)
 
-        # Convert to SI units
         Lg_m = Lg * 1e-9
         tox_m = tox * 1e-9
         Na_m = Na * 1e6
 
-        # Calculate threshold voltage
         phi_f = (self.k * self.temperature / self.q) * tf.math.log(Na_m / (self.ni + 1e-20))
         Cox = self.eps_0 * tf.constant(self.eps_ox, dtype=tf.float32) / tox_m
         Qb = tf.math.sqrt(2.0 * self.q * tf.constant(self.eps_si, dtype=tf.float32) *
                           self.eps_0 * Na_m * phi_f)
         Vth = tf.constant(self.phi_ms, dtype=tf.float32) + 2.0 * phi_f + Qb / Cox
 
-        # Material-dependent short-channel effects
         if self.material in ['gan', 'sic', 'diamond']:
             delta_Vth = 0.02 / (Lg + 0.1)
         else:
@@ -238,47 +222,40 @@ class NanoMOSFETDesigner:
 
         Vth += delta_Vth
 
-        # Calculate Vd based on target current
-        # Use a simplified model: Vd = Vtgm + (Id_target * R_on)
-        # where R_on is approximated based on device geometry
-        W = 100e-9  # 100nm width
+        W = 100e-9
 
-        # On-resistance approximation
         R_on = Lg_m / (self.mobility_n * Cox * W * (Vtgm - Vth + 0.1))
 
-        # Calculate Vd
         Vd_calc = Vtgm + Id_target * R_on * 1e6
 
-        # Ensure Vd is within reasonable range
         Vd_calc = tf.clip_by_value(Vd_calc, self.min_Vd, self.max_Vd)
 
         return float(Vd_calc.numpy()[0])
 
-    def generate_synthetic_training_data(self, n_samples: int = 10000) -> Tuple[np.ndarray, np.ndarray]:
+    def generate_synthetic_training_data(self, n_samples: int = 1000000) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Generate synthetic training data that covers the full design space
+        Generate large-scale synthetic training data optimized for 1M+ samples.
+        Uses vectorized operations for memory and performance efficiency.
         """
         np.random.seed(42)
 
-        # Generate input features (performance parameters)
-        Id = 10 ** np.random.uniform(-9, -3, n_samples)  # 1nA to 1mA
-        SS = np.random.uniform(60, 120, n_samples)  # mV/dec
-        Vtgm = np.random.uniform(0.1, 1.0, n_samples)  # V
-        tox = np.random.uniform(0.3, 3.0, n_samples)  # nm
+        # Generate input features (performance parameters) - all at once using vectorization
+        Id = 10 ** np.random.uniform(-9, -3, n_samples)
+        SS = np.random.uniform(60, 120, n_samples)
+        Vtgm = np.random.uniform(0.1, 1.0, n_samples)
+        tox = np.random.uniform(0.3, 3.0, n_samples)
 
-        X = np.column_stack([Id, SS, Vtgm, tox])
+        X = np.column_stack([Id, SS, Vtgm, tox]).astype(np.float32)
 
-        # Generate corresponding design parameters
+        # Generate corresponding design parameters using vectorized operations
         # Gate length (inversely related to Id and SS)
-        Lg = np.zeros(n_samples)
-        for i in range(n_samples):
-            # Higher current and better SS require smaller Lg
-            Lg[i] = np.clip(0.5 / (Id[i] * 1e6 + 0.1) + np.random.normal(0, 0.1),
-                            self.min_Lg, self.max_Lg)
+        Lg = np.clip(
+            0.5 / (Id * 1e6 + 0.1) + np.random.normal(0, 0.1, n_samples),
+            self.min_Lg, self.max_Lg
+        )
 
         # Doping concentration (related to Vtgm)
         doping = 10 ** np.random.uniform(16, 19, n_samples)
-        # Adjust doping based on Vtgm
         doping = doping * (Vtgm / 0.5)
         doping = np.clip(doping, 1e15, 1e20)
 
@@ -287,24 +264,21 @@ class NanoMOSFETDesigner:
         Lch = np.clip(Lch, Lg + 0.1, self.max_Lch)
 
         # Drain voltage (related to Id and Vtgm)
-        Vd = np.clip(Vtgm + Id * 1e6 * np.random.uniform(0.1, 1.0, n_samples),
-                     self.min_Vd, self.max_Vd)
+        Vd = np.clip(
+            Vtgm + Id * 1e6 * np.random.uniform(0.1, 1.0, n_samples),
+            self.min_Vd, self.max_Vd
+        )
 
-        y = np.column_stack([Lg, doping, Lch, Vd])
+        y = np.column_stack([Lg, doping, Lch, Vd]).astype(np.float32)
 
         return X, y
 
     def train(self, X_train: np.ndarray, y_train: np.ndarray,
               X_val: Optional[np.ndarray] = None, y_val: Optional[np.ndarray] = None,
-              epochs: int = 300, batch_size: int = 64, verbose: int = 1) -> Any:
+              epochs: int = 300, batch_size: int = 64, verbose: int = 0) -> Any:
 
-        # Normalize data
         X_train_norm = self.feature_scaler.fit_transform(X_train)
         y_train_norm = self.design_scaler.fit_transform(y_train)
-
-        print(f"Training data range - Id: [{X_train[:, 0].min():.2e}, {X_train[:, 0].max():.2e}]")
-        print(f"Training data range - Lg: [{y_train[:, 0].min():.3f}, {y_train[:, 0].max():.3f}] nm")
-        print(f"Training data range - Vd: [{y_train[:, 3].min():.3f}, {y_train[:, 3].max():.3f}] V")
 
         validation_data = None
         if X_val is not None and y_val is not None:
@@ -312,7 +286,6 @@ class NanoMOSFETDesigner:
             y_val_norm = self.design_scaler.transform(y_val)
             validation_data = (X_val_norm, y_val_norm)
 
-        # Add learning rate reduction on plateau
         reduce_lr = keras.callbacks.ReduceLROnPlateau(
             monitor='val_loss' if validation_data else 'loss',
             factor=0.5,
@@ -320,7 +293,6 @@ class NanoMOSFETDesigner:
             min_lr=1e-6
         )
 
-        # Early stopping
         early_stop = keras.callbacks.EarlyStopping(
             monitor='val_loss' if validation_data else 'loss',
             patience=50,
@@ -341,19 +313,16 @@ class NanoMOSFETDesigner:
         return history
 
     def predict_design(self, Id: float, SS: float, Vtgm: float, tox: float) -> Dict[str, str]:
-        # Normalize input
+        """Predict MOSFET design parameters"""
         perf_input = np.array([[Id, SS, Vtgm, tox]], dtype=np.float32)
         perf_input_norm = self.feature_scaler.transform(perf_input)
 
-        # Predict
         design_norm = self.model.predict(perf_input_norm, verbose=0)
         design_params = self.design_scaler.inverse_transform(design_norm)
 
-        # Apply constraints
         constrained_params = self.apply_nanoscale_constraints(design_params)
         Lg, doping, Lch, _ = constrained_params[0]
 
-        # Calculate Vd
         Vd = self.calculate_vd(constrained_params, perf_input)
 
         return {
@@ -368,22 +337,18 @@ class NanoMOSFETDesigner:
 
 def load_and_preprocess_data(csv_file: str, material: str = 'silicon') -> Tuple[
     np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Load and preprocess data with material-specific constraints.
-    """
+    """Load and preprocess data with material-specific constraints."""
     try:
         df = pd.read_csv(csv_file)
     except Exception as e:
         raise Exception(f"Error reading CSV file: {e}")
 
-    # Check if the CSV has the required columns
     required_columns = ['Id', 'SS', 'Vtgm', 'tox', 'Lg', 'doping', 'Lch', 'Vd']
     missing_cols = [col for col in required_columns if col not in df.columns]
 
     if missing_cols:
-        print(f"Warning: Missing columns {missing_cols}. Generating synthetic data...")
         designer = NanoMOSFETDesigner(material=material)
-        X, y = designer.generate_synthetic_training_data(5000)
+        X, y = designer.generate_synthetic_training_data(1000000)
         return train_test_split(X, y, test_size=0.2, random_state=42)
 
     X = df[['Id', 'SS', 'Vtgm', 'tox']].values.astype(np.float32)
@@ -393,9 +358,9 @@ def load_and_preprocess_data(csv_file: str, material: str = 'silicon') -> Tuple[
 
 
 def plot_training_history(history: Any, save_path: Optional[str] = None) -> None:
+    """Plot training history"""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
 
-    # Loss plot
     ax1.plot(history.history['loss'], label='Training Loss', linewidth=2, color='#3498db')
     if 'val_loss' in history.history:
         ax1.plot(history.history['val_loss'], label='Validation Loss', linewidth=2, color='#e74c3c')
@@ -406,7 +371,6 @@ def plot_training_history(history: Any, save_path: Optional[str] = None) -> None
     ax1.grid(True, alpha=0.3)
     ax1.set_yscale('log')
 
-    # MAE plot
     if 'mae' in history.history:
         ax2.plot(history.history['mae'], label='Training MAE', linewidth=2, color='#2ecc71')
         if 'val_mae' in history.history:
@@ -421,173 +385,5 @@ def plot_training_history(history: Any, save_path: Optional[str] = None) -> None
 
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
-        print(f"Training history plot saved to: {save_path}")
     else:
         plt.show()
-
-
-def print_design_results(results: Dict[str, str]) -> None:
-    print("\n" + "=" * 50)
-    print("NANOSCALE MOSFET DESIGN RESULTS")
-    print("=" * 50)
-    print()
-
-    for param, value in results.items():
-        print(f"{param:30}: {value}")
-
-    print()
-    print("=" * 50)
-    print("Quantum-aware design constraints applied")
-    print("=" * 50)
-
-
-def interactive_mode(designer: NanoMOSFETDesigner) -> None:
-    print("\n" + "=" * 50)
-    print(f"NanoMOSFET Designer - Interactive Mode ({designer.material_name})")
-    print("=" * 50)
-    print("Enter 'quit' to exit\n")
-    print("Note: For realistic results, use:")
-    print("  - Id: 1e-9 to 1e-3 A")
-    print("  - SS: 60-100 mV/dec")
-    print("  - Vtgm: 0.1-1.0 V")
-    print("  - tox: 0.5-3.0 nm\n")
-
-    while True:
-        try:
-            print("\nEnter MOSFET performance parameters:")
-            Id_input = input("Drain Current (A) [e.g., 1e-6]: ").strip()
-            if Id_input.lower() == 'quit':
-                break
-
-            SS_input = input("Subthreshold Swing (mV/dec) [e.g., 80]: ").strip()
-            if SS_input.lower() == 'quit':
-                break
-
-            Vtgm_input = input("Threshold Voltage (V) [e.g., 0.3]: ").strip()
-            if Vtgm_input.lower() == 'quit':
-                break
-
-            tox_input = input("Oxide Thickness (nm) [e.g., 1.0]: ").strip()
-            if tox_input.lower() == 'quit':
-                break
-
-            Id = float(Id_input)
-            SS = float(SS_input)
-            Vtgm = float(Vtgm_input)
-            tox = float(tox_input)
-
-            if Id <= 0 or SS <= 0 or tox <= 0:
-                print("Error: All values must be positive")
-                continue
-
-            results = designer.predict_design(Id, SS, Vtgm, tox)
-            print_design_results(results)
-
-        except ValueError as e:
-            print(f"Error: Invalid input - {e}")
-        except Exception as e:
-            print(f"Error: Prediction failed - {e}")
-
-
-def main():
-    parser = argparse.ArgumentParser(description='NanoMOSFET Designer - Nanoscale MOSFET Design Tool')
-    parser.add_argument('--csv', type=str, help='Path to CSV file with training data')
-    parser.add_argument('--material', type=str, default='silicon',
-                        choices=['silicon', 'sige', 'gaas', 'gan', 'sic', 'inp', 'diamond'],
-                        help='Channel material (default: silicon)')
-    parser.add_argument('--epochs', type=int, default=300, help='Number of training epochs (default: 300)')
-    parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training (default: 64)')
-    parser.add_argument('--interactive', action='store_true', help='Run in interactive mode for multiple predictions')
-    parser.add_argument('--predict', nargs=4, metavar=('ID', 'SS', 'VTGM', 'TOX'),
-                        help='Predict design from given parameters: Id SS Vtgm tox')
-    parser.add_argument('--plot', type=str, help='Save training history plot to file')
-    parser.add_argument('--verbose', action='store_true', help='Print detailed training information')
-    parser.add_argument('--generate_data', action='store_true', help='Generate synthetic training data')
-
-    args = parser.parse_args()
-
-    # Create designer
-    designer = NanoMOSFETDesigner(material=args.material)
-
-    # Generate synthetic data if no CSV or if requested
-    if args.generate_data or not args.csv:
-        print("Generating synthetic training data...")
-        X_train, y_train = designer.generate_synthetic_training_data(10000)
-        X_train, X_test, y_train, y_test = train_test_split(X_train, y_train, test_size=0.2, random_state=42)
-        print(f"Generated {len(X_train)} training samples and {len(X_test)} test samples")
-
-        print("\nTraining model...")
-        history = designer.train(
-            X_train, y_train,
-            X_val=X_test, y_val=y_test,
-            epochs=args.epochs,
-            batch_size=args.batch_size,
-            verbose=1 if args.verbose else 0
-        )
-
-        print("\nTraining completed!")
-        print(f"Final training loss: {history.history['loss'][-1]:.6f}")
-        if 'val_loss' in history.history:
-            print(f"Final validation loss: {history.history['val_loss'][-1]:.6f}")
-
-        if args.plot:
-            plot_training_history(history, args.plot)
-
-    elif args.csv:
-        if not os.path.exists(args.csv):
-            print(f"Error: CSV file not found: {args.csv}")
-            sys.exit(1)
-
-        print(f"Loading data from: {args.csv}")
-        try:
-            X_train, X_test, y_train, y_test = load_and_preprocess_data(args.csv, args.material)
-            print(f"Training samples: {len(X_train)}, Test samples: {len(X_test)}")
-
-            print("\nTraining model...")
-            history = designer.train(
-                X_train, y_train,
-                X_val=X_test, y_val=y_test,
-                epochs=args.epochs,
-                batch_size=args.batch_size,
-                verbose=1 if args.verbose else 0
-            )
-
-            print("\nTraining completed!")
-            print(f"Final training loss: {history.history['loss'][-1]:.6f}")
-            if 'val_loss' in history.history:
-                print(f"Final validation loss: {history.history['val_loss'][-1]:.6f}")
-
-            if args.plot:
-                plot_training_history(history, args.plot)
-
-        except Exception as e:
-            print(f"Error during training: {e}")
-            sys.exit(1)
-    else:
-        parser.print_help()
-        print("\nError: Either --csv, --generate_data, or --train_interactive is required")
-        sys.exit(1)
-
-    # Make predictions
-    if args.predict:
-        try:
-            Id, SS, Vtgm, tox = map(float, args.predict)
-            results = designer.predict_design(Id, SS, Vtgm, tox)
-            print_design_results(results)
-        except ValueError as e:
-            print(f"Error: Invalid prediction parameters - {e}")
-            sys.exit(1)
-
-    elif args.interactive:
-        interactive_mode(designer)
-
-    else:
-        print("\nModel is ready for predictions.")
-        print("Use --predict or --interactive to make predictions.")
-        print("\nExample usage:")
-        print(f"  python mosfet.py --material gan --generate_data --predict 1e-6 80 0.55 1.44")
-        print(f"  python mosfet.py --material gan --generate_data --interactive")
-
-
-if __name__ == "__main__":
-    main()
