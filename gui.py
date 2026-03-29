@@ -1,15 +1,36 @@
-import customtkinter as ctk
-import tkinter as tk
-from tkinter import messagebox, filedialog
 import threading
-import matplotlib.pyplot as plt
-from mosfet import MOSFETDesigner, load_and_preprocess_data, plot_training_history
+from tkinter import messagebox, filedialog
+
+import customtkinter as ctk
 from sklearn.model_selection import train_test_split
-import numpy as np
+
+from mosfet import MOSFETDesigner, load_and_preprocess_data, plot_training_history
 
 
 class MOSFETDesignerGUI:
     def __init__(self, root):
+        self.progress_bar = None
+        self.status_label = None
+        self.plot_path_entry = None
+        self.ss_entry = None
+        self.id_entry = None
+        self.clear_btn = None
+        self.clear_btn = None
+        self.predict_btn = None
+        self.tox_entry = None
+        self.results_text = None
+        self.save_plot_var = None
+        self.save_plot_var = None
+        self.vtgm_entry = None
+        self.vtgm_entry = None
+        self.save_plot_checkbox = None
+        self.batch_entry = None
+        self.epochs_entry = None
+        self.load_csv_btn = None
+        self.train_btn = None
+        self.generate_btn = None
+        self.material_dropdown = None
+        self.material_var = ctk.StringVar(value="silicon")
         self.root = root
         self.root.title("MOSFET Designer - GUI")
         self.root.geometry("1000x1300")
@@ -27,20 +48,16 @@ class MOSFETDesignerGUI:
         self.create_widgets()
 
     def create_widgets(self):
-        """Create all GUI widgets"""
 
-        # ===== MAIN SCROLLABLE FRAME =====
         main_frame = ctk.CTkScrollableFrame(self.root)
         main_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # ===== MATERIAL SELECTION =====
         material_frame = ctk.CTkFrame(main_frame)
         material_frame.pack(padx=20, pady=10, fill="x")
 
         material_label = ctk.CTkLabel(material_frame, text="Material:", font=("Arial", 12, "bold"))
         material_label.pack(side="left", padx=5)
 
-        self.material_var = ctk.StringVar(value="silicon")
         material_options = ["silicon", "sige", "gaas", "gan", "sic", "inp", "diamond"]
         self.material_dropdown = ctk.CTkComboBox(
             material_frame, values=material_options, variable=self.material_var,
@@ -48,7 +65,6 @@ class MOSFETDesignerGUI:
         )
         self.material_dropdown.pack(side="left", padx=5)
 
-        # ===== TRAINING SECTION =====
         training_frame = ctk.CTkFrame(main_frame)
         training_frame.pack(padx=20, pady=15, fill="x")
 
@@ -76,25 +92,21 @@ class MOSFETDesignerGUI:
         )
         self.load_csv_btn.pack(side="left", padx=5, pady=5)
 
-        # Training options frame
         train_options_frame = ctk.CTkFrame(training_frame)
         train_options_frame.pack(fill="x", pady=10)
 
-        # Epochs
         epochs_label = ctk.CTkLabel(train_options_frame, text="Epochs:", font=("Arial", 10))
         epochs_label.pack(side="left", padx=5)
         self.epochs_entry = ctk.CTkEntry(train_options_frame, placeholder_text="50", width=80)
         self.epochs_entry.pack(side="left", padx=5)
         self.epochs_entry.insert(0, "50")
 
-        # Batch Size
         batch_label = ctk.CTkLabel(train_options_frame, text="Batch Size:", font=("Arial", 10))
         batch_label.pack(side="left", padx=5)
         self.batch_entry = ctk.CTkEntry(train_options_frame, placeholder_text="512", width=80)
         self.batch_entry.pack(side="left", padx=5)
         self.batch_entry.insert(0, "512")
 
-        # Plot saving option
         plot_frame = ctk.CTkFrame(training_frame)
         plot_frame.pack(fill="x", pady=10)
 
@@ -109,50 +121,42 @@ class MOSFETDesignerGUI:
         self.plot_path_entry.pack(side="left", padx=5, fill="x", expand=True)
         self.plot_path_entry.insert(0, "training_history.png")
 
-        # Status label
         self.status_label = ctk.CTkLabel(training_frame, text="Status: Ready", text_color="green", font=("Arial", 10))
         self.status_label.pack(pady=5)
 
-        # Progress bar
         self.progress_bar = ctk.CTkProgressBar(training_frame, mode='indeterminate')
         self.progress_bar.pack(fill="x", padx=5, pady=5)
 
-        # ===== PARAMETERS INPUT SECTION =====
         params_frame = ctk.CTkFrame(main_frame)
         params_frame.pack(padx=20, pady=15, fill="x")
 
         params_label = ctk.CTkLabel(params_frame, text="MOSFET Performance Parameters", font=("Arial", 14, "bold"))
         params_label.pack(pady=10)
 
-        # Id (Drain Current)
         id_frame = ctk.CTkFrame(params_frame)
         id_frame.pack(fill="x", pady=8)
         ctk.CTkLabel(id_frame, text="Drain Current (Id) [A]:", width=150).pack(side="left", padx=5)
         self.id_entry = ctk.CTkEntry(id_frame, placeholder_text="1e-6")
         self.id_entry.pack(side="left", padx=5, fill="x", expand=True)
 
-        # SS (Subthreshold Swing)
         ss_frame = ctk.CTkFrame(params_frame)
         ss_frame.pack(fill="x", pady=8)
         ctk.CTkLabel(ss_frame, text="Subthreshold Swing (SS) [mV/dec]:", width=150).pack(side="left", padx=5)
         self.ss_entry = ctk.CTkEntry(ss_frame, placeholder_text="80")
         self.ss_entry.pack(side="left", padx=5, fill="x", expand=True)
 
-        # Vtgm (Threshold Voltage)
         vtgm_frame = ctk.CTkFrame(params_frame)
         vtgm_frame.pack(fill="x", pady=8)
         ctk.CTkLabel(vtgm_frame, text="Threshold Voltage (Vtgm) [V]:", width=150).pack(side="left", padx=5)
         self.vtgm_entry = ctk.CTkEntry(vtgm_frame, placeholder_text="0.3")
         self.vtgm_entry.pack(side="left", padx=5, fill="x", expand=True)
 
-        # tox (Oxide Thickness)
         tox_frame = ctk.CTkFrame(params_frame)
         tox_frame.pack(fill="x", pady=8)
         ctk.CTkLabel(tox_frame, text="Oxide Thickness (tox) [nm]:", width=150).pack(side="left", padx=5)
         self.tox_entry = ctk.CTkEntry(tox_frame, placeholder_text="1.0")
         self.tox_entry.pack(side="left", padx=5, fill="x", expand=True)
 
-        # ===== PREDICTION SECTION =====
         prediction_frame = ctk.CTkFrame(main_frame)
         prediction_frame.pack(padx=20, pady=15, fill="x")
 
@@ -171,7 +175,6 @@ class MOSFETDesignerGUI:
         )
         self.clear_btn.pack(side="left", padx=5)
 
-        # ===== RESULTS DISPLAY =====
         results_frame = ctk.CTkFrame(main_frame)
         results_frame.pack(padx=20, pady=15, fill="both", expand=True)
 
@@ -182,7 +185,6 @@ class MOSFETDesignerGUI:
         self.results_text.pack(fill="both", expand=True, padx=5, pady=5)
 
     def on_material_change(self, choice):
-        """Handle material selection change"""
         try:
             self.designer = MOSFETDesigner(material=choice)
             self.status_label.configure(text=f"Status: Material changed to {choice}", text_color="blue")
@@ -190,7 +192,6 @@ class MOSFETDesignerGUI:
             self.status_label.configure(text=f"Status: Error - {str(e)}", text_color="red")
 
     def generate_data_thread(self):
-        """Generate synthetic data in a separate thread"""
         if self.training_in_progress:
             messagebox.showwarning("In Progress", "Training already in progress!")
             return
@@ -200,7 +201,6 @@ class MOSFETDesignerGUI:
         thread.start()
 
     def generate_data(self):
-        """Generate 1,000,000 synthetic training samples"""
         try:
             self.training_in_progress = True
             self.progress_bar.start()
@@ -238,7 +238,6 @@ class MOSFETDesignerGUI:
             self.training_in_progress = False
 
     def train_model_thread(self):
-        """Train model in a separate thread"""
         if self.training_in_progress:
             messagebox.showwarning("In Progress", "Training already in progress!")
             return
@@ -252,7 +251,6 @@ class MOSFETDesignerGUI:
         thread.start()
 
     def train_model(self):
-        """Train the model"""
         try:
             self.training_in_progress = True
             self.progress_bar.start()
@@ -271,7 +269,6 @@ class MOSFETDesignerGUI:
             final_loss = history.history['loss'][-1]
             final_val_loss = history.history['val_loss'][-1]
 
-            # Save plot if requested
             if self.save_plot_var.get():
                 plot_path = self.plot_path_entry.get()
                 if not plot_path:
@@ -312,7 +309,6 @@ class MOSFETDesignerGUI:
             self.training_in_progress = False
 
     def load_csv(self):
-        """Load training data from CSV file"""
         file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         if file_path:
             try:
@@ -341,7 +337,6 @@ class MOSFETDesignerGUI:
                 messagebox.showerror("Error", f"Failed to load CSV: {str(e)}")
 
     def predict_design(self):
-        """Make a design prediction"""
         try:
             if self.designer is None or self.designer.model is None:
                 messagebox.showerror("Error", "Please train the model first!")
@@ -376,7 +371,6 @@ class MOSFETDesignerGUI:
             self.status_label.configure(text=f"Status: Error - {str(e)}", text_color="red")
 
     def clear_inputs(self):
-        """Clear all input fields"""
         self.id_entry.delete(0, "end")
         self.ss_entry.delete(0, "end")
         self.vtgm_entry.delete(0, "end")
