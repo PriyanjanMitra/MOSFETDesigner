@@ -16,7 +16,7 @@ tf.get_logger().setLevel('ERROR')
 
 
 # noinspection PyTypeChecker
-class NanoMOSFETDesigner:
+class MOSFETDesigner:
     def __init__(self, material: str = 'silicon'):
         """
         Initialize the MOSFET designer with specified channel material.
@@ -347,7 +347,7 @@ def load_and_preprocess_data(csv_file: str, material: str = 'silicon') -> Tuple[
     missing_cols = [col for col in required_columns if col not in df.columns]
 
     if missing_cols:
-        designer = NanoMOSFETDesigner(material=material)
+        designer = MOSFETDesigner(material=material)
         X, y = designer.generate_synthetic_training_data(1000000)
         return train_test_split(X, y, test_size=0.2, random_state=42)
 
