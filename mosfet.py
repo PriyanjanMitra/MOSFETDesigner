@@ -1,15 +1,14 @@
+import warnings
+from typing import Optional, Tuple, Dict, Any
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 from tensorflow import keras
 from tensorflow.keras import layers
-import matplotlib.pyplot as plt
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-import os
-from typing import Optional, Tuple, Dict, Any
-
-import warnings
 
 warnings.filterwarnings('ignore')
 tf.get_logger().setLevel('ERROR')
@@ -18,13 +17,6 @@ tf.get_logger().setLevel('ERROR')
 # noinspection PyTypeChecker
 class MOSFETDesigner:
     def __init__(self, material: str = 'silicon'):
-        """
-        Initialize the MOSFET designer with specified channel material.
-
-        Args:
-            material: Channel material ('silicon', 'sige', 'gaas', 'gan', 'sic', 'inp', 'diamond')
-        """
-        # Fundamental constants
         self.mobility_p = None
         self.eps_si = None
         self.ni = None
@@ -38,12 +30,8 @@ class MOSFETDesigner:
         self.eps_ox: float = 3.9
         self.k: tf.Tensor = tf.constant(1.38e-23, dtype=tf.float32)
         self.temperature: tf.Tensor = tf.constant(300.0, dtype=tf.float32)
-
-        # Set material properties
         self.material = material
         self.set_material_properties(material)
-
-        # Nanoscale constraints with material-specific ranges
         if material in ['gan', 'sic', 'diamond']:
             self.min_Lg: float = 0.5
             self.max_Lg: float = 5.0
@@ -72,8 +60,6 @@ class MOSFETDesigner:
         self.build_model()
 
     def set_material_properties(self, material: str) -> None:
-        """Set semiconductor material properties."""
-
         materials = {
             'silicon': {
                 'eps_r': 11.7,
@@ -170,7 +156,6 @@ class MOSFETDesigner:
             self.phi_ms = φ_m - (self.electron_affinity + self.bandgap / 2) - 1.0
 
     def build_model(self) -> None:
-        """Build a more robust neural network"""
         inputs = keras.Input(shape=(4,))
         x = layers.Dense(512, activation='relu')(inputs)
         x = layers.BatchNormalization()(x)
@@ -190,7 +175,6 @@ class MOSFETDesigner:
         )
 
     def apply_nanoscale_constraints(self, design_params: np.ndarray) -> np.ndarray:
-        """Apply material-specific constraints"""
         Lg = np.clip(design_params[:, 0], self.min_Lg, self.max_Lg)
         doping = np.clip(design_params[:, 1], 1e15, 1e20)
         Lch = np.clip(design_params[:, 2], Lg + 0.1, self.max_Lch)
@@ -198,7 +182,6 @@ class MOSFETDesigner:
         return np.column_stack([Lg, doping, Lch, Vd])
 
     def calculate_vd(self, design_params: np.ndarray, input_features: np.ndarray) -> float:
-        """Calculate drain voltage based on device physics"""
         design_params_tensor = tf.convert_to_tensor(design_params, dtype=tf.float32)
         input_features_tensor = tf.convert_to_tensor(input_features, dtype=tf.float32)
 
@@ -233,13 +216,8 @@ class MOSFETDesigner:
         return float(Vd_calc.numpy()[0])
 
     def generate_synthetic_training_data(self, n_samples: int = 1000000) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Generate large-scale synthetic training data optimized for 1M+ samples.
-        Uses vectorized operations for memory and performance efficiency.
-        """
         np.random.seed(42)
 
-        # Generate input features (performance parameters) - all at once using vectorization
         Id = 10 ** np.random.uniform(-9, -3, n_samples)
         SS = np.random.uniform(60, 120, n_samples)
         Vtgm = np.random.uniform(0.1, 1.0, n_samples)
@@ -247,23 +225,18 @@ class MOSFETDesigner:
 
         X = np.column_stack([Id, SS, Vtgm, tox]).astype(np.float32)
 
-        # Generate corresponding design parameters using vectorized operations
-        # Gate length (inversely related to Id and SS)
         Lg = np.clip(
             0.5 / (Id * 1e6 + 0.1) + np.random.normal(0, 0.1, n_samples),
             self.min_Lg, self.max_Lg
         )
 
-        # Doping concentration (related to Vtgm)
         doping = 10 ** np.random.uniform(16, 19, n_samples)
         doping = doping * (Vtgm / 0.5)
         doping = np.clip(doping, 1e15, 1e20)
 
-        # Channel length (Lch > Lg)
         Lch = Lg + np.random.uniform(0.2, 2.0, n_samples)
         Lch = np.clip(Lch, Lg + 0.1, self.max_Lch)
 
-        # Drain voltage (related to Id and Vtgm)
         Vd = np.clip(
             Vtgm + Id * 1e6 * np.random.uniform(0.1, 1.0, n_samples),
             self.min_Vd, self.max_Vd
@@ -313,7 +286,6 @@ class MOSFETDesigner:
         return history
 
     def predict_design(self, Id: float, SS: float, Vtgm: float, tox: float) -> Dict[str, str]:
-        """Predict MOSFET design parameters"""
         perf_input = np.array([[Id, SS, Vtgm, tox]], dtype=np.float32)
         perf_input_norm = self.feature_scaler.transform(perf_input)
 
@@ -335,9 +307,7 @@ class MOSFETDesigner:
         }
 
 
-def load_and_preprocess_data(csv_file: str, material: str = 'silicon') -> Tuple[
-    np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Load and preprocess data with material-specific constraints."""
+def load_and_preprocess_data(csv_file: str, material: str = 'silicon') -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     try:
         df = pd.read_csv(csv_file)
     except Exception as e:
@@ -358,7 +328,6 @@ def load_and_preprocess_data(csv_file: str, material: str = 'silicon') -> Tuple[
 
 
 def plot_training_history(history: Any, save_path: Optional[str] = None) -> None:
-    """Plot training history"""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
 
     ax1.plot(history.history['loss'], label='Training Loss', linewidth=2, color='#3498db')
